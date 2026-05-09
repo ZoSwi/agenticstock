@@ -1,0 +1,135 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-stockintelligence}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ml:
+    build:
+      context: ./ml
+    env_file:
+      - ./.env
+    environment:
+      ENV: ${ENV:-local}
+      MODEL_DIR: /app/artifacts
+      BACKEND_INTERNAL_URL: http://backend:8000
+    ports:
+      - "8001:8001"
+    volumes:
+      - ml_artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./.env
+    environment:
+      ENV: ${ENV:-local}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-stockintelligence}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      BACKEND_PUBLIC_BASE_URL: ${BACKEND_PUBLIC_BASE_URL:-http://localhost:8000}
+      ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ml:8001}
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      NEWS_API_KEY: ${NEWS_API_KEY:-}
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      MARKET_UNIVERSE: ${MARKET_UNIVERSE:-}
+      MARKET_ALPHA_QUOTE_LIMIT: ${MARKET_ALPHA_QUOTE_LIMIT:-12}
+      MARKET_FINNHUB_QUOTE_LIMIT: ${MARKET_FINNHUB_QUOTE_LIMIT:-20}
+      MARKET_YAHOO_FALLBACK_LIMIT: ${MARKET_YAHOO_FALLBACK_LIMIT:-45}
+      MARKET_STOOQ_QUOTE_LIMIT: ${MARKET_STOOQ_QUOTE_LIMIT:-30}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ml:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  pipeline:
+    build:
+      context: ./backend
+    environment:
+      ENV: ${ENV:-local}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-stockintelligence}
+      TICKERS: ${TICKERS:-AAPL,MSFT,NVDA,TSLA,AMZN,GOOGL}
+      PIPELINE_TIMEZONE: ${PIPELINE_TIMEZONE:-America/New_York}
+      PIPELINE_DAILY_REFRESH_TIME: ${PIPELINE_DAILY_REFRESH_TIME:-05:15}
+      LIVE_FEED_ENABLED: ${LIVE_FEED_ENABLED:-true}
+      LIVE_FEED_REFRESH_MINUTES: ${LIVE_FEED_REFRESH_MINUTES:-15}
+      NEWS_RSS_SOURCES: ${NEWS_RSS_SOURCES:-google_news_rss,yahoo_finance_rss}
+    command: ["python", "-m", "app.pipeline.scheduler"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  pipeline_once:
+    build:
+      context: ./backend
+    profiles: ["manual"]
+    environment:
+      ENV: ${ENV:-local}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-stockintelligence}
+      TICKERS: ${TICKERS:-AAPL,MSFT,NVDA,TSLA,AMZN,GOOGL}
+      NEWS_RSS_SOURCES: ${NEWS_RSS_SOURCES:-google_news_rss,yahoo_finance_rss}
+    command: ["python", "-m", "app.pipeline.daily_job"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://backend:8000}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://backend:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  ml_artifacts:

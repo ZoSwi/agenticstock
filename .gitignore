@@ -1,0 +1,64 @@
+### IntelliJ IDEA ###
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+.kotlin
+.idea/
+*.iml
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### Env / secrets ###
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+### Python ###
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+### Node / Next ###
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
+
+### Build / temp artifacts ###
+*.log
+hs_err_pid*
+out_*.html
+out_*.json
+tmp/
+temp/
