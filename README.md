@@ -1,96 +1,157 @@
-# AI Stock Intelligence Agent
+# AgenticStock
 
-Production-ready, Dockerized monorepo that provides:
+AgenticStock is a full-stack stock intelligence workspace for:
 
-- **AI agent**: natural-language stock queries with structured, risk-aware guidance
-- **Backend APIs**: FastAPI + PostgreSQL + Redis
-- **Data pipeline**: scheduled early-morning refresh + live feed pulls + feature store build
-- **ML prediction system**: baseline + XGBoost ensemble outputs (direction, risk, confidence) — **no exact price predictions**
-- **Web portal**: Next.js (TypeScript) + Tailwind, mobile-first premium UI with dark/light mode
+- Live market flow monitoring
+- AI-assisted stock analysis (decision-first, risk-aware)
+- Portfolio tracking with P/L
+- Risk engine output (position sizing, stop/target guidance)
+- Decision audit trail for review and accountability
 
-## Architecture
+This project is designed for practical business users who need clear "invest / wait / avoid" style outcomes, not long generic reports.
 
-- `frontend/`: Next.js web portal
-- `backend/`: FastAPI API + agent + persistence
-- `ml/`: feature engineering, training, and inference service
-- `infra/`: docker assets (db init, local configs)
+## What You Get
 
-## Quickstart (local)
+- **Frontend**: Next.js + TypeScript dashboard and stock workspaces
+- **Backend**: FastAPI APIs with PostgreSQL + Redis
+- **ML service**: feature engineering and directional model inference
+- **Pipeline**: scheduled and live data refresh jobs
 
-1) Ensure Docker Desktop is running.
+## Repo Structure
 
-2) Create an env file:
+- `frontend/` - web app
+- `backend/` - API services and business logic
+- `ml/` - model training and inference service
+- `infra/` - infrastructure-related assets
+
+## Prerequisites
+
+- Docker Desktop
+- Git
+
+Optional for richer live data and AI quality:
+
+- `FINNHUB_API_KEY`
+- `ALPHAVANTAGE_API_KEY`
+- `TWELVEDATA_API_KEY`
+- `OPENAI_API_KEY` (if using OpenAI provider)
+
+## Quick Start (Recommended)
+
+1. Clone repo
+
+```bash
+git clone https://github.com/ZoSwi/agenticstock.git
+cd agenticstock
+```
+
+2. Create environment file
 
 ```bash
 copy .env.example .env
 ```
 
-3) Start the stack:
+3. Start services
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
-Optional: train and persist a better ML model (stored in the `ml_artifacts` volume):
+4. Open apps
 
-```bash
-docker compose run --rm ml python -m app.train
-```
+- Web: `http://localhost:3000`
+- Backend docs: `http://localhost:8000/docs`
+- ML docs: `http://localhost:8001/docs`
 
-Optional: run a one-off daily data job (OHLCV ingestion + provider stubs):
+## Main Product Surfaces
 
-```bash
-docker compose --profile manual run --rm pipeline_once
-```
+- `/dashboard` - professional live market dashboard
+- `/stocks/{ticker}` - compact decision-first stock view
+- `/portfolio` - position book, P/L, and audit timeline
+- `/chat` - AI chat with structured investment guidance
 
-4) Open:
+## Key APIs
 
-- **Web**: `http://localhost:3000`
-- **Backend API**: `http://localhost:8000/docs`
-- **ML service**: `http://localhost:8001/docs`
+### Stocks
 
-Key live endpoints:
-
-- `GET /stocks/market/live?limit=12`
-- `GET /stocks/market/stream?limit=10&interval_seconds=12` (SSE)
-- `GET /news/live?limit=20` (global live headlines from free RSS sources)
-- `GET /news/{ticker}?limit=20` (ticker-specific live headlines)
-- `POST /system/symbols/sync` (bootstrap/update broad US symbol catalog)
 - `GET /stocks/{ticker}/analysis`
-- `GET /stocks/{ticker}/signals` (nowcast + 1d/5d/20d forecast summary)
+- `GET /stocks/{ticker}/signals`
+- `GET /stocks/{ticker}/ai-outcome`
+- `GET /stocks/{ticker}/risk-engine?capital=100000&risk_budget_pct=0.01`
 
-## Notes
+### Live market and news
 
-- This system produces **probabilistic directional outlooks** (bullish/neutral/bearish) and **risk-aware guidance**. It does **not** output or imply exact future price targets.
-- Data ingestion uses a pluggable adapter design. By default, it can run without paid API keys using public endpoints (and can be upgraded to premium providers via environment variables).
-- For stronger free-tier live flow, configure at least one of:
-  - `ALPHAVANTAGE_API_KEY` (free tier, strict daily cap)
-  - `FINNHUB_API_KEY` (free tier, good intraday quote coverage)
-  - `TWELVEDATA_API_KEY` (free tier daily candles fallback for stock detail charts)
-  - Optional tuning: `MARKET_UNIVERSE`, `MARKET_ALPHA_QUOTE_LIMIT`, `MARKET_FINNHUB_QUOTE_LIMIT`, `MARKET_YAHOO_FALLBACK_LIMIT`, `MARKET_STOOQ_QUOTE_LIMIT`, `MARKET_LIVE_MAX_AGE_SECONDS`, `NEWS_LIVE_MAX_AGE_SECONDS`, `LIVE_WARM_INTERVAL_SECONDS`, `AUTO_SYNC_SYMBOLS_ON_STARTUP`, `CORS_ALLOW_ORIGINS`
-  - Keep `ALLOW_YAHOO_FALLBACK=true` in `.env` for best resilience when Alpha Vantage is throttled.
-- If `/stocks/{ticker}/analysis` cannot use model inference, backend now serves a live-flow heuristic signal (`live_heuristic` / `live_breadth_proxy`) so UI stays active instead of showing empty/default cards.
-- The `pipeline` service now runs continuously and supports:
-  - `PIPELINE_DAILY_REFRESH_TIME` (default `05:15`) for the full early-morning refresh
-  - `LIVE_FEED_REFRESH_MINUTES` (default `15`) for rolling live feed pulls
-  - `PIPELINE_TIMEZONE` (default `America/New_York`)
-  - `NEWS_RSS_SOURCES` (default `google_news_rss,yahoo_finance_rss`)
-  - Automatic ticker coverage from both `TICKERS` and all user watchlists
+- `GET /stocks/market/live?limit=20`
+- `GET /stocks/market/stream?limit=20&interval_seconds=12` (SSE)
+- `GET /news/live?limit=20`
+- `GET /news/{ticker}?limit=20`
 
-## LLM explanation layer (optional)
+### Portfolio and audit
 
-Copy `.env.example` to `.env` and set:
+- `POST /portfolio/positions`
+- `GET /portfolio/positions?user_id=demo`
+- `GET /portfolio/summary?user_id=demo`
+- `DELETE /portfolio/positions?user_id=demo&ticker=TSLA`
+- `POST /audit/events`
+- `GET /audit/events?user_id=demo&limit=50`
 
-- `LLM_PROVIDER=none` — no external AI; answers use the built-in template from structured analysis (default).
-- `LLM_PROVIDER=openai` — set `OPENAI_API_KEY` and `OPENAI_MODEL` (use any model ID your account supports, e.g. `gpt-4o-mini`).
-- `LLM_PROVIDER=anthropic` — set `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`.
-- `LLM_PROVIDER=ollama` — local models; set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` (OpenAI-compatible `/v1/chat/completions` on your Ollama host).
+## LLM Provider Setup
 
-The API still returns the same **structured JSON**; the LLM only rewrites the **Markdown** narrative when enabled.
+In `.env`, set:
 
-## Dependency updates and “latest release” safety
+- `LLM_PROVIDER=openai` (or `anthropic`, `ollama`, `none`, `auto`)
+- `OPENAI_API_KEY=...`
+- `OPENAI_MODEL=...`
 
-- **Dependabot** (`.github/dependabot.yml`) opens weekly PRs when newer dependency versions exist. Merge only after CI is green.
-- **Smoke workflow** (`.github/workflows/smoke.yml`) runs on push/PR and weekly: installs Python + Node deps, compiles backend/ML, and builds the frontend so broken upgrades are caught before you adopt them.
+If provider is unavailable, the app degrades gracefully to deterministic structured output.
 
-Fully automatic upgrades in production (auto-deploy on green) require your own release pipeline (staging, tests, approvals). This repo provides verification; you choose when to merge and deploy.
+## Security and Privacy Notes
+
+- `.env` is ignored by git.
+- Do not commit API keys or personal secrets.
+- Rotate any key that was ever exposed in plain text.
+
+## Troubleshooting
+
+### UI loads but data looks stale
+
+- Check backend and ML service health:
+  - `http://localhost:8000/health`
+  - `http://localhost:8001/health`
+- Restart stack:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+### Stock page error or missing output
+
+- Confirm `/stocks/{ticker}/analysis` returns 200 in backend docs.
+- Verify `.env` has required provider keys.
+- Wait for cache refresh (or restart backend/redis).
+
+### Chat answers too generic
+
+- Ensure `LLM_PROVIDER` and key are correctly set.
+- Use ticker-explicit prompts:
+  - "Should I invest in MU this week?"
+
+## Development Notes
+
+- Backend compile check:
+
+```bash
+python -m compileall backend/app
+```
+
+- Frontend production build check:
+
+```bash
+cd frontend
+npm run build
+```
+
+## Disclaimer
+
+AgenticStock provides probabilistic, educational guidance and workflow support. It is not personalized financial advice.
